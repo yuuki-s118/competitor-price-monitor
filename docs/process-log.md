@@ -268,3 +268,16 @@ Application IDを取得して実際に呼び出したところ、当初実装し
 
 **確認結果**
 `npm run build` / `npm run lint` が通ることを確認した上で、実際にブラウザから 新規登録は済ませず既存アカウントでログイン → ダッシュボード表示 → 商品詳細ページで実データの価格推移グラフ表示 → 「今すぐ価格を取得」ボタンで実際に楽天から新しい価格スナップショットが追加されグラフに反映される、という一連の流れを目視で確認した。`docker compose up --build` でフロントエンドを含む全サービスが起動することも確認済み。
+
+---
+
+## 2026-09-13 — セッション7: フロントエンドのCI追加・GitHub公開
+
+**背景**
+フロントエンドを追加した以上、CIもフロントエンドのlint・buildを検証する対象に含める必要があった。
+
+**決定**
+`.github/workflows/ci.yml` に `frontend-build` ジョブを追加(`npm ci` → `eslint` → `next build`)。既存のバックエンド用ジョブは `backend-test` に改名した。GitHub Actionsの各アクション(`checkout`・`setup-python`・`setup-node`)もNode.js 24ネイティブ対応の最新版に上げ、非推奨警告を解消した。
+
+**確認結果**
+ローカルでクリーンインストール(`node_modules`削除→`npm ci`)から `lint`・`build` が通ることを確認した上でpush。GitHub Actions上で `backend-test`・`frontend-build` の両ジョブが警告なしで成功することを確認した。
