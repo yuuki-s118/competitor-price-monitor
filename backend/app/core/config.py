@@ -1,3 +1,4 @@
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -11,6 +12,17 @@ class Settings(BaseSettings):
 
     database_url: str = "postgresql+asyncpg://postgres:postgres@localhost:5432/price_monitor"
     redis_url: str = "redis://localhost:6379/0"
+
+    @field_validator("database_url")
+    @classmethod
+    def _use_asyncpg_driver(cls, v: str) -> str:
+        """Renderなど、ドライバ指定なしの `postgres(ql)://` を払い出すホスティング先向けに、
+        非同期ドライバ(asyncpg)を明示的に補う。
+        """
+        for prefix in ("postgres://", "postgresql://"):
+            if v.startswith(prefix):
+                return "postgresql+asyncpg://" + v[len(prefix) :]
+        return v
 
     jwt_secret_key: str = "dev-only-secret-key-please-override-in-env-file-3f9a2c"
     jwt_algorithm: str = "HS256"
