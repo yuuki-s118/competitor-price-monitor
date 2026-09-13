@@ -1,0 +1,26 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.env
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+.DS_Store
+
+node_modules/
+.next/
+dist/
+build/
+
+.idea/
+.vscode/
+
+# Claude Code用の非公開の作業メモ(経験レベル等の個人的な背景情報を含むため、公開リポジトリには含めない)
+CLAUDE.md
+
+# Celery beat のランタイム生成ファイル
+celerybeat-schedule

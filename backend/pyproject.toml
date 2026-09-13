@@ -1,0 +1,15 @@
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py314"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+ignore = [
+    "B008",  # FastAPI の Depends(...) はデフォルト引数での呼び出しが正しい使い方
+    "UP037", # TYPE_CHECKING配下でしかimportしない型は文字列の前方参照のままにする必要がある
+]
