@@ -7,11 +7,12 @@
 | `competitor-price-monitor-db` | Postgres(Free) | メインDB |
 | `competitor-price-monitor-redis` | Key Value(Free, Valkey) | Celeryのブローカー |
 | `competitor-price-monitor-backend` | Web(Free, Docker) | FastAPI本体 |
-| `competitor-price-monitor-celery-worker` | Background Worker(Free, Docker) | 価格取得タスクの実行 |
-| `competitor-price-monitor-celery-beat` | Background Worker(Free, Docker) | 毎時、価格取得タスクをキューに積むスケジューラ |
+| `competitor-price-monitor-celery-worker` | Background Worker(Free, Docker) | 価格取得タスクの実行 + 毎時のスケジューラ(`celery worker -B`) |
 | `competitor-price-monitor-frontend` | Web(Free, Docker) | Next.jsダッシュボード |
 
-すべてFreeプランで構成しているため費用は発生しない。ローカル(`docker-compose.yml`)と同じ構成(Celery worker + beat)をそのまま本番でも動かしている。
+すべてFreeプランで構成しているため費用は発生しない。
+
+Renderの無料枠はBackground Workerを1つまでしか作成できないため、ローカル(`docker-compose.yml`)ではCelery worker・Celery beatを別コンテナに分けているが、本番では `celery worker -B`(workerプロセスにbeatスケジューラを内蔵するオプション)で1プロセスにまとめている。
 
 なお、Renderの Cron Job 機能は実行時間に応じた従量課金があり(Freeプランの対象外)、Blueprint適用時に支払い情報の登録を求められたため使わなかった。
 
@@ -21,7 +22,7 @@
    Renderダッシュボード → *New* → *Blueprint* → このリポジトリ(`yuuki-s118/competitor-price-monitor`)を選択すると、`render.yaml` の内容を読み込んで作成するサービス一覧が表示される。内容を確認し、Apply する。
 
 2. **手動で環境変数を入力する**
-   `render.yaml` 内で `sync: false` にしている項目は値をリポジトリに含めていないため、Blueprint適用後に各サービスの *Environment* タブから入力する(`competitor-price-monitor-backend` / `celery-worker` / `celery-beat` の3サービス共通の環境変数グループ `competitor-price-monitor-shared` にまとめて入力すれば全サービスに反映される)。
+   `render.yaml` 内で `sync: false` にしている項目は値をリポジトリに含めていないため、Blueprint適用後に各サービスの *Environment* タブから入力する(`competitor-price-monitor-backend` / `celery-worker` の2サービス共通の環境変数グループ `competitor-price-monitor-shared` にまとめて入力すれば両方に反映される)。
 
    | 変数名 | 値 |
    | --- | --- |
@@ -36,7 +37,7 @@
 4. **デプロイ完了後の確認**
    - `https://<backend>.onrender.com/api/health` が200を返すこと
    - フロントエンドから新規登録・ログイン・商品登録・価格取得ができること
-   - `celery-beat` のログに毎時のスケジュール実行が、`celery-worker` のログに価格取得の実行結果が出ていること(Renderダッシュボードの各サービスの *Logs* タブで確認)
+   - `celery-worker` のログに毎時のスケジュール実行(`Scheduler: Sending due task ...`)と価格取得の実行結果が出ていること(Renderダッシュボードの *Logs* タブで確認)
 
 ## 既知の制約
 
