@@ -8,16 +8,12 @@
 | `competitor-price-monitor-redis` | Key Value(Free, Valkey) | Celeryのブローカー |
 | `competitor-price-monitor-backend` | Web(Free, Docker) | FastAPI本体 |
 | `competitor-price-monitor-celery-worker` | Background Worker(Free, Docker) | 価格取得タスクの実行 |
-| `competitor-price-monitor-collect-cron` | Cron Job(Free, Docker) | 毎時、価格取得タスクをキューに積む |
+| `competitor-price-monitor-celery-beat` | Background Worker(Free, Docker) | 毎時、価格取得タスクをキューに積むスケジューラ |
 | `competitor-price-monitor-frontend` | Web(Free, Docker) | Next.jsダッシュボード |
 
-すべてFreeプランで構成しているため費用は発生しないが、後述の制約がある。
+すべてFreeプランで構成しているため費用は発生しない。ローカル(`docker-compose.yml`)と同じ構成(Celery worker + beat)をそのまま本番でも動かしている。
 
-## なぜ Celery beat を使わないか
-
-ローカル(`docker-compose.yml`)では Celery beat が常時起動し、毎時タスクをキューに積んでいる。しかしRenderのFreeプランのBackground Workerは常時稼働が保証されておらず、beatのような「起動しっぱなしで内部タイマーを持つプロセス」には向かない。
-
-そのため本番では、Renderの Cron Job 機能(指定したスケジュールでコンテナを起動し、コマンド実行後に終了する)で `celery -A app.core.celery_app call tasks.collect_all_active_prices` を毎時実行し、タスクをキューに積むだけの役割にした。実際にタスクを実行する `celery-worker` は変更していないため、Celery + Redis による非同期処理という設計自体はそのまま本番でも動いている。
+なお、Renderの Cron Job 機能は実行時間に応じた従量課金があり(Freeプランの対象外)、Blueprint適用時に支払い情報の登録を求められたため使わなかった。
 
 ## 手順
 
@@ -25,7 +21,7 @@
    Renderダッシュボード → *New* → *Blueprint* → このリポジトリ(`yuuki-s118/competitor-price-monitor`)を選択すると、`render.yaml` の内容を読み込んで作成するサービス一覧が表示される。内容を確認し、Apply する。
 
 2. **手動で環境変数を入力する**
-   `render.yaml` 内で `sync: false` にしている項目は値をリポジトリに含めていないため、Blueprint適用後に各サービスの *Environment* タブから入力する(`competitor-price-monitor-backend` / `celery-worker` / `collect-cron` の3サービス共通の環境変数グループ `competitor-price-monitor-shared` にまとめて入力すれば全サービスに反映される)。
+   `render.yaml` 内で `sync: false` にしている項目は値をリポジトリに含めていないため、Blueprint適用後に各サービスの *Environment* タブから入力する(`competitor-price-monitor-backend` / `celery-worker` / `celery-beat` の3サービス共通の環境変数グループ `competitor-price-monitor-shared` にまとめて入力すれば全サービスに反映される)。
 
    | 変数名 | 値 |
    | --- | --- |
@@ -40,7 +36,7 @@
 4. **デプロイ完了後の確認**
    - `https://<backend>.onrender.com/api/health` が200を返すこと
    - フロントエンドから新規登録・ログイン・商品登録・価格取得ができること
-   - `collect-cron` が毎時実行され、`celery-worker` のログに価格取得の実行結果が出ていること(Renderダッシュボードの各サービスの *Logs* タブで確認)
+   - `celery-beat` のログに毎時のスケジュール実行が、`celery-worker` のログに価格取得の実行結果が出ていること(Renderダッシュボードの各サービスの *Logs* タブで確認)
 
 ## 既知の制約
 

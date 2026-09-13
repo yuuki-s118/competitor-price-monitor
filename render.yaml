@@ -5,10 +5,9 @@
 # - Postgres(Free)は作成から30日で有効期限が切れる(その後14日の猶予期間を過ぎるとデータごと削除される)。
 #   ポートフォリオとして常時公開し続ける場合は、有効期限が近づいたらRenderダッシュボードから
 #   有料プランへのアップグレード(またはDBの再作成)が必要。
-# - Celery beat(常時起動が前提のスケジューラ)はFreeのBackground Workerでは安定した常時稼働が
-#   保証されないため、本番では使わない。代わりにRenderのCron Job機能で毎時
-#   `celery call` コマンドを実行し、キューにタスクを積む方式にしている
-#   (ローカル開発用の docker-compose では、demo/開発体験のためこれまで通り celery-beat を使う)。
+# - Celery beat(毎時のスケジューラ)は Background Worker(Free)として動かす。Renderの Cron Job は
+#   実行時間に応じた従量課金があり(Freeプラン一式のみで組む方針のため)使わない。
+#   ローカル(docker-compose)と同じ構成のまま本番でも動かせる。
 # - pre-deploy commandはFreeプランのサービスでは使えないため、マイグレーション(`alembic upgrade head`)は
 #   バックエンドの起動コマンドの一部として、`uvicorn` の起動前に毎回実行する構成にしている
 #   (適用済みのマイグレーションは何もしないため、繰り返し実行しても問題ない)。
@@ -97,13 +96,13 @@ services:
           name: competitor-price-monitor-redis
           property: connectionString
 
-  - type: cron
-    name: competitor-price-monitor-collect-cron
+  - type: worker
+    name: competitor-price-monitor-celery-beat
     runtime: docker
     dockerfilePath: ./backend/Dockerfile
     dockerContext: ./backend
-    schedule: "0 * * * *"
-    dockerCommand: celery -A app.core.celery_app call tasks.collect_all_active_prices
+    dockerCommand: celery -A app.core.celery_app beat --loglevel=info
+    plan: free
     envVars:
       - fromGroup: competitor-price-monitor-shared
       - key: REDIS_URL
