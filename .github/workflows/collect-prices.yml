@@ -1,0 +1,21 @@
+name: Collect prices
+
+on:
+  schedule:
+    - cron: "0 * * * *"
+  workflow_dispatch: {}
+
+jobs:
+  trigger-collection:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Call collect-all-prices endpoint
+        run: |
+          status=$(curl -s -o /tmp/response.json -w "%{http_code}" -X POST \
+            -H "X-Internal-Secret: ${{ secrets.INTERNAL_TASK_SECRET }}" \
+            "${{ vars.BACKEND_URL }}/api/internal/collect-all-prices")
+          cat /tmp/response.json
+          if [ "$status" -ge 300 ]; then
+            echo "Request failed with status $status"
+            exit 1
+          fi

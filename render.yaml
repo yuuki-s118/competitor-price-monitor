@@ -1,21 +1,22 @@
 # Render Blueprint。Renderダッシュボードで「New Blueprint」からこのリポジトリを指定すると
-# 以下のサービス一式(DB・Key Value・バックエンド・Celery worker・Cron・フロントエンド)が
-# 一括で作成される。すべてFreeプランで組んでいるため費用は発生しないが、下記の制約がある。
+# 以下のサービス一式(DB・バックエンド・フロントエンド)が一括で作成される。
+# すべてFreeプランで組んでいるため費用は発生しないが、下記の制約がある。
 #
 # - Postgres(Free)は作成から30日で有効期限が切れる(その後14日の猶予期間を過ぎるとデータごと削除される)。
 #   ポートフォリオとして常時公開し続ける場合は、有効期限が近づいたらRenderダッシュボードから
 #   有料プランへのアップグレード(またはDBの再作成)が必要。
-# - RenderのFreeプランは無料のBackground Workerを1つまでしか作成できないため、Celery worker と
-#   Celery beat(毎時のスケジューラ)は別プロセスに分けず、`celery worker -B`(workerにbeatを内蔵する
-#   起動オプション)で1つのBackground Workerにまとめている。Renderの Cron Job は実行時間に応じた
-#   従量課金があり(Freeプラン一式のみで組む方針のため)使わない。
-#   (ローカル docker-compose では celery-worker と celery-beat を別コンテナのままにしている)。
+# - RenderのFreeプランでは Background Worker(常時稼働プロセス)自体が有料($7/月〜)だったため、
+#   本番ではCelery worker/Redisを使わない。毎時の価格収集は、GitHub Actions
+#   (`.github/workflows/collect-prices.yml`)のスケジュール実行から
+#   `POST /api/internal/collect-all-prices`(共有シークレットで認証)を叩く方式にしている。
+#   ローカル(docker-compose)では引き続き Celery + Redis + beat の構成で動かしており、
+#   非同期タスクキューとしてのCelery自体のコード・テストはそのまま残っている。
 # - pre-deploy commandはFreeプランのサービスでは使えないため、マイグレーション(`alembic upgrade head`)は
 #   バックエンドの起動コマンドの一部として、`uvicorn` の起動前に毎回実行する構成にしている
 #   (適用済みのマイグレーションは何もしないため、繰り返し実行しても問題ない)。
 #
-# JWT_SECRET_KEY・RAKUTEN_*・SMTP_* は `sync: false` にしているため、Blueprint適用後に
-# Renderダッシュボードの各サービスの Environment タブから値を入力する。
+# JWT_SECRET_KEY・RAKUTEN_*・SMTP_*・INTERNAL_TASK_SECRET は `sync: false` にしているため、
+# Blueprint適用後にRenderダッシュボードの各サービスの Environment タブから値を入力する。
 
 envVarGroups:
   - name: competitor-price-monitor-shared
@@ -44,6 +45,8 @@ envVarGroups:
         sync: false
       - key: SMTP_FROM_EMAIL
         sync: false
+      - key: INTERNAL_TASK_SECRET
+        sync: false
       - key: CORS_ORIGINS
         value: '["https://competitor-price-monitor-frontend.onrender.com"]'
 
@@ -53,12 +56,6 @@ databases:
     postgresMajorVersion: "16"
 
 services:
-  - type: keyvalue
-    name: competitor-price-monitor-redis
-    plan: free
-    maxmemoryPolicy: noeviction
-    ipAllowList: []
-
   - type: web
     name: competitor-price-monitor-backend
     runtime: docker
@@ -72,30 +69,6 @@ services:
       - key: DATABASE_URL
         fromDatabase:
           name: competitor-price-monitor-db
-          property: connectionString
-      - key: REDIS_URL
-        fromService:
-          type: keyvalue
-          name: competitor-price-monitor-redis
-          property: connectionString
-
-  - type: worker
-    name: competitor-price-monitor-celery-worker
-    runtime: docker
-    dockerfilePath: ./backend/Dockerfile
-    dockerContext: ./backend
-    dockerCommand: celery -A app.core.celery_app worker -B --loglevel=info
-    plan: free
-    envVars:
-      - fromGroup: competitor-price-monitor-shared
-      - key: DATABASE_URL
-        fromDatabase:
-          name: competitor-price-monitor-db
-          property: connectionString
-      - key: REDIS_URL
-        fromService:
-          type: keyvalue
-          name: competitor-price-monitor-redis
           property: connectionString
 
   - type: web

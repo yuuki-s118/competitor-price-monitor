@@ -26,6 +26,8 @@ class Settings(BaseSettings):
     smtp_password: str = ""
     smtp_from_email: str = ""
 
+    internal_task_secret: str = ""
+
     cors_origins: list[str] = ["http://localhost:3000"]
 
 
