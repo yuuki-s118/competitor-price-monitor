@@ -72,8 +72,8 @@ services:
     plan: free
     healthCheckPath: /api/health
     preDeployCommand: alembic upgrade head
-    envVarGroups:
-      - competitor-price-monitor-shared
+    envVars:
+      - fromGroup: competitor-price-monitor-shared
 
   - type: worker
     name: competitor-price-monitor-celery-worker
@@ -82,8 +82,8 @@ services:
     dockerContext: ./backend
     dockerCommand: celery -A app.core.celery_app worker --loglevel=info
     plan: free
-    envVarGroups:
-      - competitor-price-monitor-shared
+    envVars:
+      - fromGroup: competitor-price-monitor-shared
 
   - type: cron
     name: competitor-price-monitor-collect-cron
@@ -92,8 +92,8 @@ services:
     dockerContext: ./backend
     schedule: "0 * * * *"
     dockerCommand: celery -A app.core.celery_app call tasks.collect_all_active_prices
-    envVarGroups:
-      - competitor-price-monitor-shared
+    envVars:
+      - fromGroup: competitor-price-monitor-shared
 
   - type: web
     name: competitor-price-monitor-frontend
