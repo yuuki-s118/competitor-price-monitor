@@ -1,5 +1,7 @@
 # Competitor Price Monitor
 
+[![CI](https://github.com/yuuki-s118/competitor-price-monitor/actions/workflows/ci.yml/badge.svg)](https://github.com/yuuki-s118/competitor-price-monitor/actions/workflows/ci.yml)
+
 EC サイト(まずは楽天市場)の価格を定期収集し、グラフで可視化・価格変動を通知する Web サービス。
 
 ## なぜ作っているか

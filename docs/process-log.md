@@ -228,4 +228,20 @@ Application IDを取得して実際に呼び出したところ、当初実装し
 アプリのDockerイメージ経由ではなく、GitHub Actionsのランナーに直接pip installする構成にした。CI実行時間を短縮でき、依存関係がDockerイメージのビルド手順に依存せず素直に解決できることを確認する意味もある。
 
 **確認結果**
-GitHub Actions上でまだ実行していない(リポジトリ未プッシュ)ため、同等の手順(Python 3.14の素のvenv + ローカルのPostgreSQL/Redisコンテナ)をローカルで再現して検証した。`pip install` → `ruff check` → `alembic upgrade head` → `pytest` の全手順が成功することを確認済み。
+ローカルでの事前検証(Python 3.14の素のvenv + ローカルのPostgreSQL/Redisコンテナ)で全手順が成功することを確認した後、GitHubにリポジトリを公開してpush。実際のGitHub Actions上でもCIが1回で成功することを確認した([実行結果](https://github.com/yuuki-s118/competitor-price-monitor/actions))。
+
+---
+
+## 2026-09-13 — セッション6: GitHub公開
+
+**背景**
+ポートフォリオとして見せるため、リポジトリをGitHubに公開する必要があった。
+
+**決定**
+`yuuki-s118/competitor-price-monitor` として public で公開した。コミット前に、個人的な背景情報を含む非公開メモ(`CLAUDE.md`)と `.env` が誤って含まれないことを確認し、`.gitignore` に追加した。
+
+**理由**
+`CLAUDE.md` はこのプロジェクトの意思決定の背景を記録する目的で書いているが、内容にはポートフォリオとして見せる想定のない個人的な情報が含まれるため、公開リポジトリには含めない方針とした(process-log.mdとの役割分担は本ファイル冒頭に記載の通り)。
+
+**確認結果**
+`gh repo create --public --push` でリポジトリ作成とpushを実行し、GitHub Actions上のCIが成功することを確認した。
