@@ -245,3 +245,26 @@ Application IDを取得して実際に呼び出したところ、当初実装し
 
 **確認結果**
 `gh repo create --public --push` でリポジトリ作成とpushを実行し、GitHub Actions上のCIが成功することを確認した。
+
+---
+
+## 2026-09-13 — セッション7: フロントエンド(可視化ダッシュボード)の実装
+
+**背景**
+バックエンドAPIは一通り揃ったが、「グラフで可視化」という要件を満たす画面がまだなかった。
+
+**決定**
+`frontend/` に Next.js(App Router, TypeScript, Tailwind CSS)でダッシュボードを実装した。既存の別ポートフォリオ(Next.js + OpenAI APIのチャットアプリ)と技術を揃え、認証はバックエンドのJWTをそのまま使う構成にした(トークンをブラウザに保存し、APIリクエストのAuthorizationヘッダーに付与)。
+
+画面構成:
+- `/login`・`/register`: 認証
+- `/dashboard`: 監視対象商品の一覧・追加フォーム
+- `/dashboard/[id]`: 価格推移グラフ(Recharts)・手動での価格取得ボタン・取得履歴
+
+バックエンド側は `fastapi.middleware.cors.CORSMiddleware` を追加し、フロントエンド(`http://localhost:3000`)からの直接アクセスを許可した。`docker-compose.yml` に `frontend` サービスを追加し、バックエンド一式と合わせて `docker compose up` だけで動く構成にした。
+
+**詰まった箇所と解決**
+`create-next-app@latest` が生成したプロジェクトのNext.jsが v16.3.5 で、想定より新しく破壊的変更が入っている可能性があった。生成された `AGENTS.md` の指示に従い、`node_modules/next/dist/docs/` に同梱されているバージョン一致のドキュメントを実際に確認してから実装した(`cacheComponents`/PPRの単一設定化、Turbopackがデフォルト化、など。今回使った範囲のAPIには影響なし)。また、Rechartsの `Tooltip` の `formatter` の型エラー(値の型が `number | string | Array` のユニオン)をビルド時に検出し、`Number()` で変換して解消した。
+
+**確認結果**
+`npm run build` / `npm run lint` が通ることを確認した上で、実際にブラウザから 新規登録は済ませず既存アカウントでログイン → ダッシュボード表示 → 商品詳細ページで実データの価格推移グラフ表示 → 「今すぐ価格を取得」ボタンで実際に楽天から新しい価格スナップショットが追加されグラフに反映される、という一連の流れを目視で確認した。`docker compose up --build` でフロントエンドを含む全サービスが起動することも確認済み。

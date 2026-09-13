@@ -20,5 +20,7 @@ class Settings(BaseSettings):
     rakuten_access_key: str = ""
     rakuten_allowed_origin: str = "https://github.com"
 
+    cors_origins: list[str] = ["http://localhost:3000"]
+
 
 settings = Settings()

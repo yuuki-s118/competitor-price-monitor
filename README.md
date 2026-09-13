@@ -18,6 +18,7 @@ EC サイト(まずは楽天市場)の価格を定期収集し、グラフで可
 | DB | PostgreSQL + SQLAlchemy 2.0 (async) |
 | マイグレーション | Alembic |
 | 非同期・定期処理 | Celery + Redis(毎時、監視対象商品の価格を自動収集) |
+| フロントエンド | Next.js (App Router) + TypeScript + Tailwind CSS + Recharts |
 | インフラ | Docker Compose → Render → AWS(段階移行予定) |
 | CI/CD | GitHub Actions(lint + test を自動実行) |
 
@@ -39,6 +40,8 @@ docker compose run --rm backend alembic upgrade head
 ```
 
 楽天から実際に価格を取得するには、[楽天ウェブサービス](https://webservice.rakuten.co.jp/) でアプリ登録して取得した `RAKUTEN_APP_ID`・`RAKUTEN_ACCESS_KEY` と、アプリ登録時の Allowed websites に指定したドメイン(`RAKUTEN_ALLOWED_ORIGIN`)を `backend/.env` に設定する。
+
+起動後、ダッシュボードは http://localhost:3000 (新規登録 → ログイン → 商品登録 → 価格取得 → グラフ表示、まで一通り試せる)。
 
 ## 実装済みAPI
 
@@ -71,7 +74,9 @@ backend/        FastAPI アプリ本体
     api/routes/ エンドポイント
   alembic/      DBマイグレーション
   tests/
+frontend/       Next.js アプリ本体
+  src/
+    app/        ページ(login / register / dashboard / dashboard/[id])
+    lib/        APIクライアント・型定義・認証トークン管理
 docs/           設計判断・開発ログ・ER図
 ```
-
-frontend(可視化ダッシュボード)は未着手。
