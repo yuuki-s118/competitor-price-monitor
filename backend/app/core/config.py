@@ -20,6 +20,12 @@ class Settings(BaseSettings):
     rakuten_access_key: str = ""
     rakuten_allowed_origin: str = "https://github.com"
 
+    smtp_host: str = ""
+    smtp_port: int = 587
+    smtp_user: str = ""
+    smtp_password: str = ""
+    smtp_from_email: str = ""
+
     cors_origins: list[str] = ["http://localhost:3000"]
 
 

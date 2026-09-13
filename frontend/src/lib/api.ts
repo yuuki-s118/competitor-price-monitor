@@ -1,5 +1,8 @@
 import { clearToken, getToken, setToken } from "./auth";
 import type {
+  NotificationLog,
+  PriceAlert,
+  PriceAlertCreateInput,
   PriceSnapshot,
   Retailer,
   TrackedProduct,
@@ -83,4 +86,24 @@ export const api = {
 
   listPriceSnapshots: (id: number) =>
     request<PriceSnapshot[]>(`/api/tracked-products/${id}/price-snapshots`),
+
+  listPriceAlerts: (id: number) => request<PriceAlert[]>(`/api/tracked-products/${id}/alerts`),
+
+  createPriceAlert: (id: number, input: PriceAlertCreateInput) =>
+    request<PriceAlert>(`/api/tracked-products/${id}/alerts`, {
+      method: "POST",
+      body: JSON.stringify(input),
+    }),
+
+  updatePriceAlert: (id: number, alertId: number, input: { is_active: boolean }) =>
+    request<PriceAlert>(`/api/tracked-products/${id}/alerts/${alertId}`, {
+      method: "PATCH",
+      body: JSON.stringify(input),
+    }),
+
+  deletePriceAlert: (id: number, alertId: number) =>
+    request<void>(`/api/tracked-products/${id}/alerts/${alertId}`, { method: "DELETE" }),
+
+  listNotificationLogs: (id: number) =>
+    request<NotificationLog[]>(`/api/tracked-products/${id}/notification-logs`),
 };

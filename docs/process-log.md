@@ -281,3 +281,41 @@ Application IDを取得して実際に呼び出したところ、当初実装し
 
 **確認結果**
 ローカルでクリーンインストール(`node_modules`削除→`npm ci`)から `lint`・`build` が通ることを確認した上でpush。GitHub Actions上で `backend-test`・`frontend-build` の両ジョブが警告なしで成功することを確認した。
+
+---
+
+## 2026-09-13 — セッション8: 価格アラート通知機能の実装
+
+**背景**
+データモデル(`price_alerts`・`notification_logs`)は初期のER設計段階から用意していたが、実際にアラート条件を設定し通知を送るロジックはまだ実装していなかった。デプロイより先に機能を完成させる方針とし、今回対応した。
+
+**決定**
+- アラート条件は `PriceAlert.rule_type` で2種類をサポート: `price_below`(指定価格を下回ったら通知)・`price_drop_percent`(直近2回の取得間で指定%以上下落したら通知)。
+- 監視対象商品(`tracked_products`)にネストするREST API(`/api/tracked-products/{id}/alerts` のCRUD、`/api/tracked-products/{id}/notification-logs` で通知履歴取得)として実装し、既存の所有者チェック(`_get_owned_product`)の仕組みをそのまま再利用した。
+- 通知メールの送信は `aiosmtplib`(非同期SMTPクライアント)を追加し、`SMTP_HOST` 等を環境変数で設定する方式にした。未設定の場合は送信をスキップしログに記録するのみとし、アプリ全体を止めない。
+- アラート評価は `services/price_collection.collect_price()`(手動トリガーAPIとCeleryタスクの両方が呼ぶ共通関数)の中で、価格スナップショット保存の直後に実行する構成にした。こうすることで、定期収集・手動取得のどちらの経路でも同じロジックで通知される。
+- `price_below` は「状態」なので、直前のスナップショットも既に条件を満たしていた場合は再通知しない(閾値を下回った瞬間のみ通知する、状態遷移ベースの重複防止)。`price_drop_percent` は直近2点間の変化そのものが通知対象のため、条件を満たす都度通知する。
+
+**理由**
+価格収集ロジックに評価処理を組み込むことで、Celery側に通知用の別スケジュールを持つ必要がなくなり、「価格を取得したら都度チェックする」というシンプルな設計にできた。また、閾値を下回った状態が続く限り毎時通知が飛び続けると実用上ノイズになるため、`price_below` にのみ状態遷移ベースの重複防止を入れた。
+
+**確認結果**
+`respx` で楽天APIレスポンスをモックし、`aiosmtplib` 経由の送信関数を差し替えるテストを追加(初回トリガー・重複防止・下落率トリガーの3パターン)。既存分と合わせてバックエンドのテスト20件、ruffのlintがすべて通ることを確認。フロントエンドの商品詳細ページにアラート設定フォーム・一覧・通知履歴セクションを追加し、`docker compose up` で起動した実環境でアラートの作成・有効化切替・削除が実際のAPIを通して動作することをブラウザから確認した。
+
+---
+
+## 2026-09-13 — セッション9: Renderへのデプロイ設定
+
+**背景**
+機能面(認証・CRUD・価格収集・可視化・アラート通知)が一通り揃ったため、当初計画していたRenderへのデプロイに着手した。
+
+**決定**
+`render.yaml`(Render Blueprint)を追加し、Postgres・Key Value(Redis互換のValkey)・バックエンド・Celery worker・フロントエンドの5サービスをすべてFreeプランで構成した。フロントエンドは開発時の `next dev` ではなく、マルチステージビルドで `next build` → `next start` する本番用の `frontend/Dockerfile.prod` を別途用意した(`NEXT_PUBLIC_API_BASE_URL` はNext.jsの仕様上ビルド時に静的に埋め込まれるため、ビルド引数として渡す構成にした)。
+
+Celery beatは常時起動が前提のスケジューラだが、RenderのFree Background Workerでは常時稼働が保証されないため本番では使わず、代わりにRenderの Cron Job 機能で毎時 `celery call` コマンドを実行してタスクをキューに積む方式にした(タスクを実際に処理する `celery-worker` 自体は変更していないため、Celery + Redisによる非同期処理の構成はそのまま維持している)。DBマイグレーションは Render の `preDeployCommand` で `alembic upgrade head` を実行し、デプロイのたびに自動適用されるようにした。
+
+**理由**
+Freeプランのみで構成する方針としたため、常時稼働が必要なコンポーネント(スケジューラ)と、キューに積まれたら随時処理すればよいコンポーネント(worker)を分離し、前者だけをスケジュール実行型のCron Jobに置き換えることで、コストをかけずに定期収集の仕組みを成立させた。
+
+**確認結果**
+`docker build` で `frontend/Dockerfile.prod` のビルドが通ること、ビルドしたイメージを実際に起動して `NEXT_PUBLIC_API_BASE_URL` がクライアントバンドルに正しく埋め込まれていることを確認した。`render.yaml` はYAMLとして正しくパースできること、既存のテスト・lintに影響がないことも確認済み。Renderアカウントでの実際のBlueprint適用はこれから行う。

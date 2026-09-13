@@ -39,3 +39,27 @@ export interface PriceSnapshot {
   currency: string;
   scraped_at: string;
 }
+
+export type AlertRuleType = "price_below" | "price_drop_percent";
+
+export interface PriceAlert {
+  id: number;
+  tracked_product_id: number;
+  rule_type: AlertRuleType;
+  threshold_value: string;
+  is_active: boolean;
+  created_at: string;
+}
+
+export interface PriceAlertCreateInput {
+  rule_type: AlertRuleType;
+  threshold_value: string;
+}
+
+export interface NotificationLog {
+  id: number;
+  price_alert_id: number;
+  price_snapshot_id: number;
+  channel: "email";
+  sent_at: string;
+}

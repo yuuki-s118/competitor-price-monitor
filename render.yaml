@@ -1,0 +1,106 @@
+# Render Blueprint。Renderダッシュボードで「New Blueprint」からこのリポジトリを指定すると
+# 以下のサービス一式(DB・Key Value・バックエンド・Celery worker・Cron・フロントエンド)が
+# 一括で作成される。すべてFreeプランで組んでいるため費用は発生しないが、下記の制約がある。
+#
+# - Postgres(Free)は作成から30日で有効期限が切れる(その後14日の猶予期間を過ぎるとデータごと削除される)。
+#   ポートフォリオとして常時公開し続ける場合は、有効期限が近づいたらRenderダッシュボードから
+#   有料プランへのアップグレード(またはDBの再作成)が必要。
+# - Celery beat(常時起動が前提のスケジューラ)はFreeのBackground Workerでは安定した常時稼働が
+#   保証されないため、本番では使わない。代わりにRenderのCron Job機能で毎時
+#   `celery call` コマンドを実行し、キューにタスクを積む方式にしている
+#   (ローカル開発用の docker-compose では、demo/開発体験のためこれまで通り celery-beat を使う)。
+#
+# JWT_SECRET_KEY・RAKUTEN_*・SMTP_* は `sync: false` にしているため、Blueprint適用後に
+# Renderダッシュボードの各サービスの Environment タブから値を入力する。
+
+envVarGroups:
+  - name: competitor-price-monitor-shared
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: competitor-price-monitor-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          type: keyvalue
+          name: competitor-price-monitor-redis
+          property: connectionString
+      - key: ENVIRONMENT
+        value: production
+      - key: JWT_ALGORITHM
+        value: HS256
+      - key: ACCESS_TOKEN_EXPIRE_MINUTES
+        value: "60"
+      - key: JWT_SECRET_KEY
+        sync: false
+      - key: RAKUTEN_APP_ID
+        sync: false
+      - key: RAKUTEN_ACCESS_KEY
+        sync: false
+      - key: RAKUTEN_ALLOWED_ORIGIN
+        sync: false
+      - key: SMTP_HOST
+        sync: false
+      - key: SMTP_PORT
+        value: "587"
+      - key: SMTP_USER
+        sync: false
+      - key: SMTP_PASSWORD
+        sync: false
+      - key: SMTP_FROM_EMAIL
+        sync: false
+      - key: CORS_ORIGINS
+        value: '["https://competitor-price-monitor-frontend.onrender.com"]'
+
+databases:
+  - name: competitor-price-monitor-db
+    plan: free
+    postgresMajorVersion: "16"
+
+services:
+  - type: keyvalue
+    name: competitor-price-monitor-redis
+    plan: free
+    maxmemoryPolicy: noeviction
+    ipAllowList: []
+
+  - type: web
+    name: competitor-price-monitor-backend
+    runtime: docker
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    plan: free
+    healthCheckPath: /api/health
+    preDeployCommand: alembic upgrade head
+    envVarGroups:
+      - competitor-price-monitor-shared
+
+  - type: worker
+    name: competitor-price-monitor-celery-worker
+    runtime: docker
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    dockerCommand: celery -A app.core.celery_app worker --loglevel=info
+    plan: free
+    envVarGroups:
+      - competitor-price-monitor-shared
+
+  - type: cron
+    name: competitor-price-monitor-collect-cron
+    runtime: docker
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    schedule: "0 * * * *"
+    dockerCommand: celery -A app.core.celery_app call tasks.collect_all_active_prices
+    envVarGroups:
+      - competitor-price-monitor-shared
+
+  - type: web
+    name: competitor-price-monitor-frontend
+    runtime: docker
+    dockerfilePath: ./frontend/Dockerfile.prod
+    dockerContext: ./frontend
+    plan: free
+    envVars:
+      - key: NEXT_PUBLIC_API_BASE_URL
+        value: https://competitor-price-monitor-backend.onrender.com

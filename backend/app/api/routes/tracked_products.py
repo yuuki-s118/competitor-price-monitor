@@ -4,10 +4,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user
 from app.db.session import get_db
+from app.models.notification_log import NotificationLog
+from app.models.price_alert import PriceAlert
 from app.models.price_snapshot import PriceSnapshot
 from app.models.retailer import Retailer
 from app.models.tracked_product import TrackedProduct
 from app.models.user import User
+from app.schemas.notification_log import NotificationLogRead
+from app.schemas.price_alert import PriceAlertCreate, PriceAlertRead, PriceAlertUpdate
 from app.schemas.price_snapshot import PriceSnapshotRead
 from app.schemas.tracked_product import (
     TrackedProductCreate,
@@ -27,6 +31,18 @@ async def _get_owned_product(
     if product is None or product.user_id != current_user.id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="商品が見つかりません")
     return product
+
+
+async def _get_owned_alert(
+    product_id: int, alert_id: int, current_user: User, db: AsyncSession
+) -> PriceAlert:
+    await _get_owned_product(product_id, current_user, db)
+    alert = await db.get(PriceAlert, alert_id)
+    if alert is None or alert.tracked_product_id != product_id:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="アラートが見つかりません"
+        )
+    return alert
 
 
 @router.post("", response_model=TrackedProductRead, status_code=status.HTTP_201_CREATED)
@@ -129,5 +145,86 @@ async def list_price_snapshots(
         select(PriceSnapshot)
         .where(PriceSnapshot.tracked_product_id == product_id)
         .order_by(PriceSnapshot.scraped_at.desc())
+    )
+    return list(result.all())
+
+
+@router.post(
+    "/{product_id}/alerts", response_model=PriceAlertRead, status_code=status.HTTP_201_CREATED
+)
+async def create_price_alert(
+    product_id: int,
+    alert_in: PriceAlertCreate,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> PriceAlert:
+    await _get_owned_product(product_id, current_user, db)
+
+    alert = PriceAlert(tracked_product_id=product_id, **alert_in.model_dump())
+    db.add(alert)
+    await db.commit()
+    await db.refresh(alert)
+    return alert
+
+
+@router.get("/{product_id}/alerts", response_model=list[PriceAlertRead])
+async def list_price_alerts(
+    product_id: int,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> list[PriceAlert]:
+    await _get_owned_product(product_id, current_user, db)
+
+    result = await db.scalars(
+        select(PriceAlert)
+        .where(PriceAlert.tracked_product_id == product_id)
+        .order_by(PriceAlert.id)
+    )
+    return list(result.all())
+
+
+@router.patch("/{product_id}/alerts/{alert_id}", response_model=PriceAlertRead)
+async def update_price_alert(
+    product_id: int,
+    alert_id: int,
+    alert_in: PriceAlertUpdate,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> PriceAlert:
+    alert = await _get_owned_alert(product_id, alert_id, current_user, db)
+
+    for field, value in alert_in.model_dump(exclude_unset=True).items():
+        setattr(alert, field, value)
+
+    await db.commit()
+    await db.refresh(alert)
+    return alert
+
+
+@router.delete("/{product_id}/alerts/{alert_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_price_alert(
+    product_id: int,
+    alert_id: int,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> None:
+    alert = await _get_owned_alert(product_id, alert_id, current_user, db)
+    await db.delete(alert)
+    await db.commit()
+
+
+@router.get("/{product_id}/notification-logs", response_model=list[NotificationLogRead])
+async def list_notification_logs(
+    product_id: int,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> list[NotificationLog]:
+    await _get_owned_product(product_id, current_user, db)
+
+    result = await db.scalars(
+        select(NotificationLog)
+        .join(PriceAlert, NotificationLog.price_alert_id == PriceAlert.id)
+        .where(PriceAlert.tracked_product_id == product_id)
+        .order_by(NotificationLog.sent_at.desc())
     )
     return list(result.all())
