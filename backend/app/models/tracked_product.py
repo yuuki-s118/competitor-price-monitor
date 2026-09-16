@@ -33,5 +33,9 @@ class TrackedProduct(Base):
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
 
-    price_snapshots: Mapped[list["PriceSnapshot"]] = relationship(back_populates="tracked_product")
-    price_alerts: Mapped[list["PriceAlert"]] = relationship(back_populates="tracked_product")
+    price_snapshots: Mapped[list["PriceSnapshot"]] = relationship(
+        back_populates="tracked_product", cascade="all, delete-orphan", passive_deletes=True
+    )
+    price_alerts: Mapped[list["PriceAlert"]] = relationship(
+        back_populates="tracked_product", cascade="all, delete-orphan", passive_deletes=True
+    )

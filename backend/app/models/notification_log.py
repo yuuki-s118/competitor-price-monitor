@@ -24,7 +24,9 @@ class NotificationLog(Base):
     price_alert_id: Mapped[int] = mapped_column(
         ForeignKey("price_alerts.id", ondelete="CASCADE"), nullable=False, index=True
     )
-    price_snapshot_id: Mapped[int] = mapped_column(ForeignKey("price_snapshots.id"), nullable=False)
+    price_snapshot_id: Mapped[int] = mapped_column(
+        ForeignKey("price_snapshots.id", ondelete="CASCADE"), nullable=False
+    )
 
     channel: Mapped[NotificationChannel] = mapped_column(Enum(NotificationChannel), nullable=False)
     sent_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

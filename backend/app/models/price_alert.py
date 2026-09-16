@@ -34,4 +34,6 @@ class PriceAlert(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     tracked_product: Mapped["TrackedProduct"] = relationship(back_populates="price_alerts")
-    notification_logs: Mapped[list["NotificationLog"]] = relationship(back_populates="price_alert")
+    notification_logs: Mapped[list["NotificationLog"]] = relationship(
+        back_populates="price_alert", cascade="all, delete-orphan", passive_deletes=True
+    )
