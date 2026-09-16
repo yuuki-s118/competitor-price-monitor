@@ -7,6 +7,7 @@ import type {
   Retailer,
   TrackedProduct,
   TrackedProductCreateInput,
+  TrackedProductUpdateInput,
   UserRead,
 } from "./types";
 
@@ -77,6 +78,12 @@ export const api = {
     }),
 
   getTrackedProduct: (id: number) => request<TrackedProduct>(`/api/tracked-products/${id}`),
+
+  updateTrackedProduct: (id: number, input: TrackedProductUpdateInput) =>
+    request<TrackedProduct>(`/api/tracked-products/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(input),
+    }),
 
   deleteTrackedProduct: (id: number) =>
     request<void>(`/api/tracked-products/${id}`, { method: "DELETE" }),

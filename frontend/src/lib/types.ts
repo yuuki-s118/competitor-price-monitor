@@ -32,6 +32,13 @@ export interface TrackedProductCreateInput {
   image_url?: string;
 }
 
+export interface TrackedProductUpdateInput {
+  name?: string;
+  external_product_id?: string;
+  product_url?: string;
+  is_active?: boolean;
+}
+
 export interface PriceSnapshot {
   id: number;
   tracked_product_id: number;

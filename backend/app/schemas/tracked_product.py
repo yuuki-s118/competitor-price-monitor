@@ -13,6 +13,8 @@ class TrackedProductCreate(BaseModel):
 
 class TrackedProductUpdate(BaseModel):
     name: str | None = None
+    external_product_id: str | None = None
+    product_url: str | None = None
     image_url: str | None = None
     is_active: bool | None = None
 

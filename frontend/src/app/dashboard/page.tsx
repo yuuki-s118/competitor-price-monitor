@@ -20,6 +20,12 @@ export default function DashboardPage() {
   const [retailerId, setRetailerId] = useState<number | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [editName, setEditName] = useState("");
+  const [editProductUrl, setEditProductUrl] = useState("");
+  const [editExternalProductId, setEditExternalProductId] = useState("");
+  const [isSavingEdit, setIsSavingEdit] = useState(false);
+
   useEffect(() => {
     if (!getToken()) {
       router.push("/login");
@@ -77,6 +83,46 @@ export default function DashboardPage() {
   function handleLogout() {
     clearToken();
     router.push("/login");
+  }
+
+  function startEdit(product: TrackedProduct) {
+    setEditingId(product.id);
+    setEditName(product.name);
+    setEditProductUrl(product.product_url);
+    setEditExternalProductId(product.external_product_id);
+  }
+
+  function cancelEdit() {
+    setEditingId(null);
+  }
+
+  async function handleSaveEdit(id: number) {
+    setIsSavingEdit(true);
+    setError(null);
+    try {
+      await api.updateTrackedProduct(id, {
+        name: editName,
+        product_url: editProductUrl,
+        external_product_id: editExternalProductId,
+      });
+      setEditingId(null);
+      await loadData();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "商品の更新に失敗しました");
+    } finally {
+      setIsSavingEdit(false);
+    }
+  }
+
+  async function handleDelete(id: number) {
+    if (!window.confirm("この商品を削除しますか？価格履歴も削除されます。")) return;
+    setError(null);
+    try {
+      await api.deleteTrackedProduct(id);
+      await loadData();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "商品の削除に失敗しました");
+    }
   }
 
   return (
@@ -141,25 +187,82 @@ export default function DashboardPage() {
         {!isLoading && products.length === 0 && (
           <p className="text-sm text-slate-500">まだ監視対象の商品がありません。</p>
         )}
-        {products.map((product) => (
-          <Link
-            key={product.id}
-            href={`/dashboard/${product.id}`}
-            className="flex items-center justify-between rounded-lg border border-slate-200 px-4 py-3 hover:border-slate-400"
-          >
-            <div>
-              <p className="font-medium text-slate-900">{product.name}</p>
-              <p className="text-xs text-slate-500">{product.external_product_id}</p>
-            </div>
-            <span
-              className={`rounded-full px-2 py-1 text-xs ${
-                product.is_active ? "bg-green-100 text-green-700" : "bg-slate-100 text-slate-500"
-              }`}
+        {products.map((product) =>
+          editingId === product.id ? (
+            <div
+              key={product.id}
+              className="flex flex-col gap-3 rounded-lg border border-slate-300 px-4 py-3"
             >
-              {product.is_active ? "監視中" : "停止中"}
-            </span>
-          </Link>
-        ))}
+              <input
+                placeholder="商品名"
+                value={editName}
+                onChange={(e) => setEditName(e.target.value)}
+                className="rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-900"
+              />
+              <input
+                placeholder="商品コード(例: shop:1234)"
+                value={editExternalProductId}
+                onChange={(e) => setEditExternalProductId(e.target.value)}
+                className="rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-900"
+              />
+              <input
+                placeholder="商品URL"
+                type="url"
+                value={editProductUrl}
+                onChange={(e) => setEditProductUrl(e.target.value)}
+                className="rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-900"
+              />
+              <div className="flex gap-2">
+                <button
+                  onClick={() => handleSaveEdit(product.id)}
+                  disabled={isSavingEdit}
+                  className="rounded-md bg-slate-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-slate-700 disabled:opacity-50"
+                >
+                  保存
+                </button>
+                <button
+                  onClick={cancelEdit}
+                  className="rounded-md border border-slate-300 px-3 py-1.5 text-sm text-slate-700"
+                >
+                  キャンセル
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div
+              key={product.id}
+              className="flex items-center justify-between rounded-lg border border-slate-200 px-4 py-3 hover:border-slate-400"
+            >
+              <Link href={`/dashboard/${product.id}`} className="min-w-0 flex-1">
+                <p className="font-medium text-slate-900">{product.name}</p>
+                <p className="text-xs text-slate-500">{product.external_product_id}</p>
+              </Link>
+              <div className="flex shrink-0 items-center gap-3">
+                <span
+                  className={`rounded-full px-2 py-1 text-xs ${
+                    product.is_active
+                      ? "bg-green-100 text-green-700"
+                      : "bg-slate-100 text-slate-500"
+                  }`}
+                >
+                  {product.is_active ? "監視中" : "停止中"}
+                </span>
+                <button
+                  onClick={() => startEdit(product)}
+                  className="text-sm text-slate-600 underline"
+                >
+                  編集
+                </button>
+                <button
+                  onClick={() => handleDelete(product.id)}
+                  className="text-sm text-red-600 underline"
+                >
+                  削除
+                </button>
+              </div>
+            </div>
+          ),
+        )}
       </section>
     </main>
   );
