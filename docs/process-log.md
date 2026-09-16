@@ -319,3 +319,34 @@ Freeプランのみで構成する方針としたため、常時稼働が必要�
 
 **確認結果**
 `docker build` で `frontend/Dockerfile.prod` のビルドが通ること、ビルドしたイメージを実際に起動して `NEXT_PUBLIC_API_BASE_URL` がクライアントバンドルに正しく埋め込まれていることを確認した。`render.yaml` はYAMLとして正しくパースできること、既存のテスト・lintに影響がないことも確認済み。Renderアカウントでの実際のBlueprint適用はこれから行う。
+
+---
+
+## 2026-09-16 — セッション9(続き): Render本番デプロイの確定・稼働確認
+
+**背景**
+Blueprintの設計時点(前エントリ)では Celery worker + Redis(Key Value)を維持し、スケジューラ部分だけをRenderの Cron Job に置き換える想定だった。実際にBlueprintを適用する過程で、RenderのFreeプランには無料のBackground Worker自体が存在しない(Celery workerも有料対象になる)ことが分かり、方針を見直した。
+
+**決定**
+- 本番では Celery worker / Redis を使わず、`POST /api/internal/collect-all-prices`(`X-Internal-Secret` ヘッダーによる共有シークレット認証)という内部APIエンドポイントを追加し、GitHub Actionsの毎時スケジュール実行(`.github/workflows/collect-prices.yml`)から直接叩く方式に変更した。パブリックリポジトリのGitHub Actionsは実行時間が無料のため、追加コストなしで定期実行が成立する。
+- Celery + Redisによる非同期タスクキューの実装自体はローカル環境(`docker-compose.yml`)・テストコードとして維持し、本番の定期収集経路としてのみ使わない構成にした。非同期処理の設計・実装力を示す成果物としての価値と、本番運用コストの両立を狙った。
+- RenderのマネージドPostgresが払い出す `DATABASE_URL` はドライバ指定なしの `postgresql://` 形式で提供されるため、SQLAlchemyの非同期エンジンがデフォルトの同期ドライバ(psycopg2、未インストール)を選ぼうとして起動に失敗する問題があった。設定読み込み時に `postgresql://` / `postgres://` を `postgresql+asyncpg://` へ正規化するバリデータを追加して解消した。
+- RenderのFreeプランには pre-deploy command がないため、マイグレーション(`alembic upgrade head`)はコンテナ起動スクリプト(`backend/docker/start.sh`)内で `uvicorn` 起動前に毎回実行する方式にした(適用済みのマイグレーションは冪等なため、繰り返し実行しても問題ない)。
+
+**確認結果**
+Renderダッシュボードから実際にBlueprintを適用し、Postgres・バックエンド・フロントエンドの3サービスがすべて正常稼働(Live)することを確認した。デプロイ済みのフロントエンド(https://competitor-price-monitor-frontend.onrender.com )から新規登録 → ログイン → 商品登録 → 楽天からの実価格取得 → グラフ表示、まで一通り実データで動作することを確認。GitHub Actionsの `Collect prices` ワークフローを手動実行し、内部APIへのリクエストが成功し価格スナップショットが追加されることも確認した。
+
+---
+
+## 2026-09-16 — セッション10: 本番稼働確認で見つかった不具合の修正
+
+**背景**
+本番環境での動作確認を通して、ローカル開発時には顕在化していなかった2つの不具合が見つかった。
+
+**決定・修正内容**
+- **ダークモード時の表示崩れ**: `globals.css` にシステムのダークモード設定に連動する配色定義があったが、フォームなど個別コンポーネントは白背景前提の配色のまま実装していたため、ダークモード環境で背景と文字色の組み合わせが崩れていた。UI全体をダークモード対応するのではなく、`color-scheme: light` を明示してライトモード表示に固定する方針で解消した。
+- **監視対象商品の削除が失敗する不具合**: 価格スナップショットやアラート条件が紐づいた商品を削除すると500エラーになっていた。原因は、DB側には `ON DELETE CASCADE` を設定済みだったものの、SQLAlchemyのORM側のリレーションにカスケード設定がなく、親レコード削除時に子テーブルの外部キー列(NOT NULL制約あり)をNULLに更新しようとして制約違反になっていたため。各リレーションに `cascade="all, delete-orphan"` と `passive_deletes=True` を設定し、削除処理をDB側の `ON DELETE CASCADE` に委ねる形に修正した。あわせて `notification_logs.price_snapshot_id` に `ON DELETE CASCADE` が設定されていなかった漏れも修正した。
+- 上記の修正に合わせて、監視対象商品の商品コード・URLを後から修正できる編集機能と、削除機能(確認ダイアログ付き)をダッシュボードに追加した(商品コードの入力ミスに気づいた際、登録し直す以外の手段がなかったため)。
+
+**確認結果**
+両修正ともローカルで問題を再現した上で修正・確認し、バックエンドのテスト・lintが通ることを確認してからデプロイした。本番環境でダークモード設定でも正しく表示されること、価格アラート・通知履歴が紐づいた商品でも削除が成功することを確認済み。

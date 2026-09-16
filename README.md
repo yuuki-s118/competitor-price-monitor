@@ -4,6 +4,8 @@
 
 EC サイト(まずは楽天市場)の価格を定期収集し、グラフで可視化・価格変動を通知する Web サービス。
 
+**デプロイ済みURL: https://competitor-price-monitor-frontend.onrender.com**(新規登録から試せる。Freeプランのため初回アクセス時に応答が遅い場合がある)
+
 ## なぜ作っているか
 
 フリーランスとして「本格的なバックエンド開発力」を示すためのポートフォリオプロジェクト。完成品だけでなく、設計判断の過程も成果物として [docs/process-log.md](docs/process-log.md) に記録している。
@@ -17,9 +19,9 @@ EC サイト(まずは楽天市場)の価格を定期収集し、グラフで可
 | 認証 | JWT(PyJWT + bcrypt) |
 | DB | PostgreSQL + SQLAlchemy 2.0 (async) |
 | マイグレーション | Alembic |
-| 非同期・定期処理 | Celery + Redis(毎時、監視対象商品の価格を自動収集) |
+| 非同期・定期処理 | Celery + Redis(ローカル)。本番は GitHub Actions の定期実行(毎時)から内部APIを叩く方式 |
 | フロントエンド | Next.js (App Router) + TypeScript + Tailwind CSS + Recharts |
-| インフラ | Docker Compose → Render → AWS(段階移行予定) |
+| インフラ | Docker Compose(ローカル)→ Render(本番稼働中)→ AWS(段階移行予定) |
 | CI/CD | GitHub Actions(lint + test を自動実行) |
 
 選定理由は [docs/process-log.md](docs/process-log.md) を参照。データモデルは [docs/er-diagram.md](docs/er-diagram.md) を参照。デプロイ手順は [docs/deployment.md](docs/deployment.md) を参照。
@@ -63,7 +65,7 @@ docker compose run --rm backend alembic upgrade head
 
 すべて `/docs` (Swagger UI) から実際に試せる。詳細な設計判断は [docs/process-log.md](docs/process-log.md) を参照。
 
-`collect-price` は手動トリガー用のエンドポイントで、これとは別に Celery beat が毎時、有効な監視対象商品すべてについて同じ処理を自動実行する(`celery-worker` / `celery-beat` コンテナ)。価格取得のたびに、有効な価格アラート条件を評価し、条件を満たせばメール通知を送信して `notification_logs` に記録する。
+`collect-price` は手動トリガー用のエンドポイントで、これとは別に毎時、有効な監視対象商品すべてについて同じ処理を自動実行する(ローカルは Celery beat、本番は GitHub Actions の定期実行。詳細は [docs/deployment.md](docs/deployment.md))。価格取得のたびに、有効な価格アラート条件を評価し、条件を満たせばメール通知を送信して `notification_logs` に記録する。
 
 ## ディレクトリ構成
 
