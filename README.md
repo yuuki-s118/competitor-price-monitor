@@ -67,6 +67,8 @@ docker compose run --rm backend alembic upgrade head
 
 `collect-price` は手動トリガー用のエンドポイントで、これとは別に毎時、有効な監視対象商品すべてについて同じ処理を自動実行する(ローカルは Celery beat、本番は GitHub Actions の定期実行。詳細は [docs/deployment.md](docs/deployment.md))。価格取得のたびに、有効な価格アラート条件を評価し、条件を満たせばメール通知を送信して `notification_logs` に記録する。
 
+> **メール送信について**: アラート評価・重複防止・送信ロジックはローカル環境で実際の送信まで検証済み。現在の本番環境(Render Free)は外向きのSMTP通信がホスティング側でブロックされているため送信できない(詳細・対応方針は [docs/deployment.md](docs/deployment.md) の既知の制約を参照)。
+
 ## ディレクトリ構成
 
 ```
