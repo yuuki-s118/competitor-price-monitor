@@ -37,13 +37,45 @@ def _is_triggered(
     return False
 
 
+async def _already_notified_in_current_streak(
+    db: AsyncSession, alert: PriceAlert, snapshot: PriceSnapshot
+) -> bool:
+    """このアラートについて、直近で条件を満たさなくなった時点より後に、
+    既に通知を送っているかどうか(price_below の重複通知防止用)。
+
+    アラート自体がいつ作られたかに関わらず、「このアラートが既に通知済みか」だけを見る。
+    過去の価格履歴に条件を満たすスナップショットがあっても、そのアラートでまだ一度も
+    通知していなければ通知する。
+    """
+    last_untriggered_at = await db.scalar(
+        select(PriceSnapshot.scraped_at)
+        .where(
+            PriceSnapshot.tracked_product_id == alert.tracked_product_id,
+            PriceSnapshot.price > alert.threshold_value,
+            PriceSnapshot.scraped_at < snapshot.scraped_at,
+        )
+        .order_by(PriceSnapshot.scraped_at.desc())
+        .limit(1)
+    )
+
+    query = (
+        select(NotificationLog.id)
+        .join(PriceSnapshot, NotificationLog.price_snapshot_id == PriceSnapshot.id)
+        .where(NotificationLog.price_alert_id == alert.id)
+    )
+    if last_untriggered_at is not None:
+        query = query.where(PriceSnapshot.scraped_at > last_untriggered_at)
+
+    return (await db.scalar(query.limit(1))) is not None
+
+
 async def evaluate_price_alerts(
     db: AsyncSession, product: TrackedProduct, snapshot: PriceSnapshot
 ) -> None:
     """新しい価格スナップショットに対して、有効なアラート条件を評価し、条件を満たせば通知する。
 
-    PRICE_BELOW は状態(閾値以下かどうか)なので、直前のスナップショットも既に条件を
-    満たしていた場合は再通知しない(閾値を下回った瞬間だけ通知する)。
+    PRICE_BELOW は状態(閾値以下かどうか)なので、そのアラートが同じ「下回っている状態」で
+    既に通知済みなら再通知しない(閾値を上回ってから再び下回った場合のみ再通知する)。
     PRICE_DROP_PERCENT は直近2点間の変化そのものが通知対象のため、条件を満たす度に通知する。
     """
     result = await db.scalars(
@@ -56,25 +88,26 @@ async def evaluate_price_alerts(
     if not alerts:
         return
 
-    previous_snapshot = await db.scalar(
-        select(PriceSnapshot)
-        .where(
-            PriceSnapshot.tracked_product_id == product.id,
-            PriceSnapshot.id != snapshot.id,
+    previous_price: Decimal | None = None
+    if any(alert.rule_type == AlertRuleType.PRICE_DROP_PERCENT for alert in alerts):
+        previous_snapshot = await db.scalar(
+            select(PriceSnapshot)
+            .where(
+                PriceSnapshot.tracked_product_id == product.id,
+                PriceSnapshot.id != snapshot.id,
+            )
+            .order_by(PriceSnapshot.scraped_at.desc())
+            .limit(1)
         )
-        .order_by(PriceSnapshot.scraped_at.desc())
-        .limit(1)
-    )
-    previous_price = previous_snapshot.price if previous_snapshot else None
+        previous_price = previous_snapshot.price if previous_snapshot else None
 
     for alert in alerts:
         if not _is_triggered(alert, snapshot.price, previous_price):
             continue
-        if (
-            alert.rule_type == AlertRuleType.PRICE_BELOW
-            and previous_price is not None
-            and _price_below_triggered(alert, previous_price)
-        ):
+        is_deduped_price_below = alert.rule_type == AlertRuleType.PRICE_BELOW and (
+            await _already_notified_in_current_streak(db, alert, snapshot)
+        )
+        if is_deduped_price_below:
             continue
         await _notify(db, product, alert, snapshot)
 
