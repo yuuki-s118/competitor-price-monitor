@@ -4,7 +4,7 @@
 
 EC サイト(まずは楽天市場)の価格を定期収集し、グラフで可視化・価格変動を通知する Web サービス。
 
-**デプロイ済みURL: https://competitor-price-monitor-frontend.onrender.com**(新規登録から試せる。Freeプランのため初回アクセス時に応答が遅い場合がある)
+**デプロイ済みURL: https://competitor-price-monitor-frontend.onrender.com  **(新規登録から試せる。Freeプランのため初回アクセス時に応答が遅い場合がある)
 
 ## なぜ作っているか
 
